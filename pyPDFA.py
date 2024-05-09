@@ -1,3 +1,4 @@
+import fitz
 import logging
 import os
 import shutil
@@ -6,7 +7,8 @@ import sys
 import time
 
 # Versioning
-__version__ = "1.0.0"
+__version__ = "1.1.0"
+# pyinstaller --onefile --name pyPDFA-V1.1.0 pyPDFA.py
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s',
@@ -25,9 +27,21 @@ def get_base_path():
         return os.path.dirname(os.path.abspath(__file__))
 
 
+def get_pdf_page_count(pdf_path):
+    try:
+        doc = fitz.open(pdf_path)
+        page_count = len(doc)
+        doc.close()
+        return page_count
+    except Exception as e:
+        logging.error(f"Error getting page count for {pdf_path}: {e}")
+        return 0
+
+
 def convert_to_pdfa(source_path, output_path):
     try:
         gs_executable = r'C:\Program Files\gs\gs10.03.0\bin\gswin64c.exe'
+        page_count = get_pdf_page_count(source_path)
         cmd = [
             gs_executable,
             "-dQUIET"
@@ -41,9 +55,12 @@ def convert_to_pdfa(source_path, output_path):
             f"-sOutputFile={output_path}",
             source_path
         ]
+        for page_num in range(1, page_count + 1):
+            logging.info(f"Processing page {page_num} of {page_count}")
+
         subprocess.run(cmd, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         logging.info(f"Successfully converted {source_path} to PDF/A.")
-        return True
+        return True, page_count
     except subprocess.CalledProcessError as e:
         logging.error(f"Failed to convert {source_path}: {e}")
         return False

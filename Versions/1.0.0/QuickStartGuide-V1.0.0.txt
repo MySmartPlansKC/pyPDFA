@@ -1,0 +1,10 @@
+Quick Start Guide for PDFA Conversion Tool v1.0.0
+
+1. Ensure that the PDFA_IN directory is properly set up in the same directory as the executable and contains PDF files.
+2. Run the PDFA Conversion Tool executable.
+3. The program will check the PDFA_OUT and PDF_Not_Converted directories and prompt to clear them if they are not empty.
+4. If the directories are cleared or already empty, the program will proceed to process the PDF files.
+5. Successful conversions will be saved in the PDFA_OUT directory and any errors will be moved to the PDF_Not_Converted directory.
+6. Review the pdf_conversion.log file for detailed logs of the operation.
+
+Note: Ensure that Ghostscript 10.03.0 is installed and configured correctly as this tool relies on it for PDF conversions. Ensure that no other process is using the directories while the PDFA Conversion Tool is running.
