@@ -1,4 +1,4 @@
-import fitz
+# import fitz
 import logging
 import os
 import shutil
@@ -7,11 +7,13 @@ import sys
 import time
 
 # Versioning
-__version__ = "1.1.0"
-# pyinstaller --onefile --name pyPDFA-V1.1.0 pyPDFA.py
+__version__ = "1.1.1"
+# pyinstaller --onefile --name pyPDFA-V1.1.1 pyPDFA.py
 
 # Configure logging
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s',
+logging.basicConfig(level=logging.INFO,
+                    format='%(asctime)s - %(levelname)s - %(message)s',
+                    datefmt='%Y-%m-%d %H:%M:%S',
                     handlers=[
                         logging.FileHandler("pdf_conversion.log"),
                         logging.StreamHandler()
