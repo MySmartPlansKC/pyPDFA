@@ -6,6 +6,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [1.2.0] - 2024-05-14
+### Added
+  - New Package
+    - Added pdfrw for new page count
+    - Smaller package and better performance
+    - 
+### Removed
+  - PymuPdf removed to reduce size and enhance performance
+
+
 ## [1.1.0] - 2024-05-09
 ### Added
 - New feature

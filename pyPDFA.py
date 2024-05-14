@@ -1,4 +1,4 @@
-# import fitz
+import pdfrw
 import logging
 import os
 import shutil
@@ -7,8 +7,8 @@ import sys
 import time
 
 # Versioning
-__version__ = "1.1.1"
-# pyinstaller --onefile --name pyPDFA-V1.1.1 pyPDFA.py
+__version__ = "1.2.0"
+# pyinstaller --onefile --name pyPDFA-V1.2.0 pyPDFA.py
 
 # Configure logging
 logging.basicConfig(level=logging.INFO,
@@ -31,9 +31,8 @@ def get_base_path():
 
 def get_pdf_page_count(pdf_path):
     try:
-        doc = fitz.open(pdf_path)
-        page_count = len(doc)
-        doc.close()
+        reader = pdfrw.PdfReader(pdf_path)
+        page_count = len(reader.pages)
         return page_count
     except Exception as e:
         logging.error(f"Error getting page count for {pdf_path}: {e}")
