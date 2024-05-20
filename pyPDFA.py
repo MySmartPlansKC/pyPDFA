@@ -7,8 +7,8 @@ import sys
 import time
 
 # Versioning
-__version__ = "1.2.0"
-# pyinstaller --onefile --name pyPDFA-V1.2.0 pyPDFA.py
+__version__ = "1.3.0"
+# pyinstaller --onefile --name pyPDFA-V1.3.0 pyPDFA.py
 
 # Configure logging
 logging.basicConfig(level=logging.INFO,
@@ -18,6 +18,26 @@ logging.basicConfig(level=logging.INFO,
                         logging.FileHandler("pdf_conversion.log"),
                         logging.StreamHandler()
                     ])
+
+
+def safe_remove(path):
+    try:
+        os.unlink(path)
+    except PermissionError:
+        logging.error(f"Could not delete {path} - it may be in use.")
+
+
+def safe_rmtree(directory):
+    for root, dirs, files in os.walk(directory, topdown=False):
+        for name in files:
+            file_path = os.path.join(root, name)
+            safe_remove(file_path)
+        for name in dirs:
+            dir_path = os.path.join(root, name)
+            try:
+                os.rmdir(dir_path)
+            except OSError as e:
+                logging.error(f"Could not delete directory {dir_path}: {str(e)}")
 
 
 def get_base_path():
@@ -45,7 +65,7 @@ def convert_to_pdfa(source_path, output_path):
         page_count = get_pdf_page_count(source_path)
         cmd = [
             gs_executable,
-            "-dQUIET"
+            "-dQUIET",
             "-dPDFA",
             "-dBATCH",
             "-dNOPAUSE",
@@ -59,12 +79,16 @@ def convert_to_pdfa(source_path, output_path):
         for page_num in range(1, page_count + 1):
             logging.info(f"Processing page {page_num} of {page_count}")
 
-        subprocess.run(cmd, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-        logging.info(f"Successfully converted {source_path} to PDF/A.")
-        return True, page_count
+        result = subprocess.run(cmd, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        if result.returncode == 0:
+            logging.info(f"Successfully converted {source_path} to PDF/A.")
+            return True, page_count
+        else:
+            logging.error(f"Ghostscript error: {result.stderr.decode()}")
+            return False, page_count
     except subprocess.CalledProcessError as e:
-        logging.error(f"Failed to convert {source_path}: {e}")
-        return False
+        logging.error(f"Failed to convert {source_path}: {str(e)}")
+        return False, 0
 
 
 def check_and_clear_directory(directory):
@@ -74,8 +98,8 @@ def check_and_clear_directory(directory):
                 f"Directory {directory} is not empty. Delete all contents? (y/n): "
             )
             if response.lower() == 'y':
-                shutil.rmtree(directory)  # Remove the directory and its contents
-                os.makedirs(directory)  # Recreate the empty directory
+                safe_rmtree(directory)  # Remove the directory and its contents, safely
+                os.makedirs(directory, exist_ok=True)  # Recreate the empty directory
                 logging.info(f"All contents of {directory} have been deleted.")
                 time.sleep(1)  # Wait for a moment after deleting the contents
             else:
@@ -84,6 +108,18 @@ def check_and_clear_directory(directory):
     else:
         os.makedirs(directory, exist_ok=True)
     return True
+
+
+def remove_empty_directories(path, root_dir):
+    try:
+        if os.path.isdir(path) and not os.listdir(path):
+            os.rmdir(path)
+            logging.info(f"Removed empty directory: {path}")
+            parent_dir = os.path.dirname(path)
+            if parent_dir != root_dir:  # Ensure the root directory is not removed
+                remove_empty_directories(parent_dir, root_dir)
+    except OSError as e:
+        logging.error(f"Error removing directory {path}: {str(e)}")
 
 
 def batch_convert(input_dir, output_dir, error_dir):
@@ -103,21 +139,26 @@ def batch_convert(input_dir, output_dir, error_dir):
         return
 
     has_errors = False
-    for filename in os.listdir(input_dir):
-        if filename.endswith('.pdf'):
-            source_file = os.path.join(input_dir, filename)
-            output_file = os.path.join(output_dir, filename)
-            if convert_to_pdfa(source_file, output_file):
-                # Comment out the line below for testing
-                os.remove(source_file)
-                # logging.info(f"Conversion successful, skipping deletion for testing: {source_file}")
-            else:
-                error_destination = os.path.join(error_dir, filename)
-                # Comment out the lines below for testing
-                shutil.move(source_file, error_destination)
-                logging.warning(f"File moved to error directory: {filename}")
-                # logging.warning(f"Conversion failed, skipping move to error directory for testing: {filename}")
-                has_errors = True
+    for root, dirs, files in os.walk(input_dir):
+        for file in files:
+            if file.endswith('.pdf'):
+                source_file = os.path.join(root, file)
+                relative_path = os.path.relpath(root, input_dir)
+                output_file_dir = os.path.join(output_dir, relative_path)
+                output_file = os.path.join(output_file_dir, file)
+                error_file_dir = os.path.join(error_dir, relative_path)
+
+                os.makedirs(output_file_dir, exist_ok=True)
+                os.makedirs(error_file_dir, exist_ok=True)
+
+                success, _ = convert_to_pdfa(source_file, output_file)
+                if success:
+                    os.remove(source_file)
+                    remove_empty_directories(os.path.dirname(source_file), input_dir)
+                else:
+                    shutil.move(source_file, os.path.join(error_file_dir, file))
+                    logging.warning(f"File moved to error directory: {file}")
+                    has_errors = True
 
     if has_errors:
         logging.info("There has been at least one error, please check the PDF_Not_Converted folder.")
@@ -126,10 +167,15 @@ def batch_convert(input_dir, output_dir, error_dir):
 if __name__ == '__main__':
     base_path = get_base_path()
 
-    # input_directory = r"..\xPDFTestFiles"
-    input_directory = os.path.join(base_path, 'PDFA_IN')
-    output_directory = os.path.join(base_path, 'PDFA_OUT')
-    error_directory = os.path.join(base_path, 'PDF_Not_Converted')
+    # Testing paths
+    # input_directory = os.path.join(base_path, "..", "xPDFTestFiles", "PDFA_IN")
+    # output_directory = os.path.join(base_path, "..", "xPDFTestFiles", "PDFA_OUT")
+    # error_directory = os.path.join(base_path, "..", "xPDFTestFiles", "PDF_Not_Converted")
+
+    # Uncomment below for production paths
+    input_directory = os.path.join(base_path, "PDFA_IN")
+    output_directory = os.path.join(base_path, "PDFA_OUT")
+    error_directory = os.path.join(base_path, "PDF_Not_Converted")
 
     logging.info(f"Starting PDFA Conversion v{__version__}")
     time.sleep(1)

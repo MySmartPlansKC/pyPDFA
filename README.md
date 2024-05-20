@@ -8,7 +8,7 @@ This tool automates the conversion of PDF files to PDF/A format to ensure they m
 
 ## Setup
 Before running the executable, make sure the following directories are present:
-- `PDFA_IN`: Place your PDFs here for conversion.
+- `PDFA_IN`: Place your PDFs here for conversion. This directory can include subfolders with PDF files.
 - `PDFA_OUT`: Converted PDF/A files will be saved here.
 - `PDF_Not_Converted`: PDFs that failed conversion will be moved here.
 
@@ -16,7 +16,7 @@ The application checks and creates these directories if they don't exist.
 
 ## Usage
 1. **Prepare Your Files**:
-   - Place PDF files into the `PDFA_IN` directory.
+   - Place PDF files into the `PDFA_IN` directory, including any subdirectories if needed.
 2. **Run the Tool**:
    - Execute the tool. It processes all files from `PDFA_IN`, attempts to convert them, and handles them based on success or failure.
 3. **Check for Errors**:
