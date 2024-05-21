@@ -4,6 +4,11 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [1.3.1] - 2024-05-21
+### Fixed
+  - bug causing the PDFA_IN folder to get deleted when removing the processed files.
+
+---
 
 ## [1.3.0] - 2024-05-20
 ### Added

@@ -7,8 +7,8 @@ import sys
 import time
 
 # Versioning
-__version__ = "1.3.0"
-# pyinstaller --onefile --name pyPDFA-V1.3.0 pyPDFA.py
+__version__ = "1.3.1"
+# pyinstaller --onefile --name pyPDFA-V1.3.1 pyPDFA.py
 
 # Configure logging
 logging.basicConfig(level=logging.INFO,
@@ -99,7 +99,7 @@ def check_and_clear_directory(directory):
             )
             if response.lower() == 'y':
                 safe_rmtree(directory)  # Remove the directory and its contents, safely
-                os.makedirs(directory, exist_ok=True)  # Recreate the empty directory
+                # os.makedirs(directory, exist_ok=True)  # Recreate the empty directory
                 logging.info(f"All contents of {directory} have been deleted.")
                 time.sleep(1)  # Wait for a moment after deleting the contents
             else:
@@ -146,19 +146,20 @@ def batch_convert(input_dir, output_dir, error_dir):
                 relative_path = os.path.relpath(root, input_dir)
                 output_file_dir = os.path.join(output_dir, relative_path)
                 output_file = os.path.join(output_file_dir, file)
-                error_file_dir = os.path.join(error_dir, relative_path)
 
                 os.makedirs(output_file_dir, exist_ok=True)
-                os.makedirs(error_file_dir, exist_ok=True)
-
                 success, _ = convert_to_pdfa(source_file, output_file)
-                if success:
-                    os.remove(source_file)
-                    remove_empty_directories(os.path.dirname(source_file), input_dir)
-                else:
+
+                if not success:
+                    error_file_dir = os.path.join(error_dir, relative_path)
+                    os.makedirs(error_file_dir, exist_ok=True)
                     shutil.move(source_file, os.path.join(error_file_dir, file))
                     logging.warning(f"File moved to error directory: {file}")
                     has_errors = True
+
+                    # remove_empty_directories(os.path.dirname(source_file), input_dir)
+                else:
+                    os.remove(source_file)
 
     if has_errors:
         logging.info("There has been at least one error, please check the PDF_Not_Converted folder.")
@@ -168,14 +169,14 @@ if __name__ == '__main__':
     base_path = get_base_path()
 
     # Testing paths
-    # input_directory = os.path.join(base_path, "..", "xPDFTestFiles", "PDFA_IN")
-    # output_directory = os.path.join(base_path, "..", "xPDFTestFiles", "PDFA_OUT")
-    # error_directory = os.path.join(base_path, "..", "xPDFTestFiles", "PDF_Not_Converted")
+    input_directory = os.path.join(base_path, "..", "xPDFTestFiles", "PDFA_IN")
+    output_directory = os.path.join(base_path, "..", "xPDFTestFiles", "PDFA_OUT")
+    error_directory = os.path.join(base_path, "..", "xPDFTestFiles", "PDF_Not_Converted")
 
     # Uncomment below for production paths
-    input_directory = os.path.join(base_path, "PDFA_IN")
-    output_directory = os.path.join(base_path, "PDFA_OUT")
-    error_directory = os.path.join(base_path, "PDF_Not_Converted")
+    # input_directory = os.path.join(base_path, "PDFA_IN")
+    # output_directory = os.path.join(base_path, "PDFA_OUT")
+    # error_directory = os.path.join(base_path, "PDF_Not_Converted")
 
     logging.info(f"Starting PDFA Conversion v{__version__}")
     time.sleep(1)
