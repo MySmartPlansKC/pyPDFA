@@ -296,6 +296,14 @@ if __name__ == '__main__':
     logger.info(f"Starting PDFA Conversion v{__version__}")
     time.sleep(1)
 
+    # Check if the input directory exists
+    if not os.path.exists(input_directory):
+        os.makedirs(input_directory)
+        print("The 'PDFA_IN' folder was missing and has now been created.")
+        print("Please add your files/folders to the 'PDFA_IN' folder for processing.")
+        input("Press Enter to close the program...")
+        sys.exit(1)
+
     os.makedirs(output_directory, exist_ok=True)
 
     batch_convert(input_directory, output_directory, error_directory)
