@@ -8,8 +8,8 @@ import time
 from typing import Union
 
 # Versioning
-__version__ = "1.4.1"
-# pyinstaller --onefile --name pyPDFA-V1.4.1 pyPDFA.py
+__version__ = "1.4.2"
+# pyinstaller --onefile --name pyPDFA-V1.4.2 pyPDFA.py
 
 # Global logger variables
 logger = logging.getLogger('main_logger')
@@ -102,7 +102,7 @@ def safe_rmtree(directory):
                 log_exception("Stack trace:")
 
 
-def get_base_path(input_directory_dev):
+def get_base_path(input_directory_dev=None):
     if getattr(sys, 'frozen', False):
         return os.path.dirname(sys.executable)
     else:
@@ -134,9 +134,9 @@ def remove_annotations_and_comments(pdf_path):
 
 def get_timeout(file_size_kb):
     if file_size_kb < 150000:
-        return 30  # 5 minutes
+        return 300  # 5 minutes
     elif file_size_kb < 300000:
-        return 60  # 10 minutes
+        return 600  # 10 minutes
     elif file_size_kb < 600000:
         return 900  # 15 minutes
     elif file_size_kb < 900000:
@@ -332,18 +332,18 @@ def batch_convert(input_dir: Union[str, os.PathLike], output_dir: Union[str, os.
 
 if __name__ == '__main__':
     # Testing paths
-    input_directory = r"E:\Python\xPDFTestFiles\PDFA_IN"
-    output_directory = r"E:\Python\xPDFTestFiles\PDFA_OUT"
-    error_directory = r"E:\Python\xPDFTestFiles\PDF_Not_Converted"
-
-    base_path = get_base_path(input_directory)
-    print(f"The base path is: {base_path}")
-    setup_logging()
+    # input_directory = r"E:\Python\xPDFTestFiles\PDFA_IN"
+    # output_directory = r"E:\Python\xPDFTestFiles\PDFA_OUT"
+    # error_directory = r"E:\Python\xPDFTestFiles\PDF_Not_Converted"
+    # base_path = get_base_path(input_directory)
 
     # Uncomment below for production paths
-    # input_directory = os.path.join(base_path, "PDFA_IN")
-    # output_directory = os.path.join(base_path, "PDFA_OUT")
-    # error_directory = os.path.join(base_path, "PDF_Not_Converted")
+    base_path = get_base_path()
+    input_directory = os.path.join(base_path, "PDFA_IN")
+    output_directory = os.path.join(base_path, "PDFA_OUT")
+    error_directory = os.path.join(base_path, "PDF_Not_Converted")
+
+    setup_logging()
 
     logger.info(f"Starting PDFA Conversion v{__version__}")
     time.sleep(1)
