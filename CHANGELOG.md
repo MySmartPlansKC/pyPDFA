@@ -3,6 +3,12 @@ All notable changes to this project will be documented in this file.
 
 ## [1.4.3] - 2024-06-07
 ### Changed
+  - Adjusted Timeout settings for larger files.
+
+---
+
+## [1.4.3] - 2024-06-07
+### Changed
   - Adjusted Metadata creation to be more complete.
 
 ---

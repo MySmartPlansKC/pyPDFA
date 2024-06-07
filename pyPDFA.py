@@ -9,8 +9,8 @@ from typing import Union
 from pikepdf.models.metadata import PdfMetadata
 
 # Versioning
-__version__ = "1.4.3"
-# pyinstaller --onefile --name pyPDFA-V1.4.3 pyPDFA.py
+__version__ = "1.4.4"
+# pyinstaller --onefile --name pyPDFA-V1.4.4 pyPDFA.py
 
 # Global logger variables
 logger = logging.getLogger('main_logger')
@@ -135,15 +135,15 @@ def remove_annotations_and_comments(pdf_path):
 
 def get_timeout(file_size_kb):
     if file_size_kb < 150000:
-        return 300  # 5 minutes
+        return 480  # 8 minutes
     elif file_size_kb < 300000:
-        return 600  # 10 minutes
-    elif file_size_kb < 600000:
         return 900  # 15 minutes
-    elif file_size_kb < 900000:
+    elif file_size_kb < 600000:
         return 1200  # 20 minutes
-    else:
+    elif file_size_kb < 900000:
         return 1500  # 25 minutes
+    else:
+        return 1800  # 30 minutes
 
 
 def set_pdfa_metadata(pdf_path):
@@ -200,16 +200,16 @@ def convert_to_pdfa(source_path, output_path, error_dir, input_dir, document_ind
             "-dPDFA=1",
             "-dBATCH",
             "-dNOPAUSE",
-            "-dNOOUTERSAVE",
-            "-sColorConversionStrategy=sRGB",
+            # "-dNOOUTERSAVE",
+            "-sColorConversionStrategy=RGB",
             "-sDEVICE=pdfwrite",
-            "-dPDFACompatibilityPolicy=1",
-            "-dEmbedAllFonts=true",
-            "-dSubsetFonts=true",
-            "-dConvertCMYKImagesToRGB=true",
-            "-dRemoveAnnots=true",
-            "-dRemoveComments=true",
-            "-dWriteXRefStm=false",
+            # "-dPDFACompatibilityPolicy=1",
+            # "-dEmbedAllFonts=true",
+            # "-dSubsetFonts=true",
+            # "-dConvertCMYKImagesToRGB=true",
+            # "-dRemoveAnnots=true",
+            # "-dRemoveComments=true",
+            # "-dWriteXRefStm=false",
             f"-sOutputFile={output_path}",
             source_path
         ]
@@ -357,16 +357,16 @@ def batch_convert(input_dir: Union[str, os.PathLike], output_dir: Union[str, os.
 
 if __name__ == '__main__':
     # Testing paths
-    input_directory = r"E:\Python\xPDFTestFiles\PDFA_IN"
-    output_directory = r"E:\Python\xPDFTestFiles\PDFA_OUT"
-    error_directory = r"E:\Python\xPDFTestFiles\PDF_Not_Converted"
-    base_path = get_base_path(input_directory)
+    # input_directory = r"E:\Python\xPDFTestFiles\PDFA_IN"
+    # output_directory = r"E:\Python\xPDFTestFiles\PDFA_OUT"
+    # error_directory = r"E:\Python\xPDFTestFiles\PDF_Not_Converted"
+    # base_path = get_base_path(input_directory)
 
     # Uncomment below for production paths
-    # base_path = get_base_path()
-    # input_directory = os.path.join(base_path, "PDFA_IN")
-    # output_directory = os.path.join(base_path, "PDFA_OUT")
-    # error_directory = os.path.join(base_path, "PDF_Not_Converted")
+    base_path = get_base_path()
+    input_directory = os.path.join(base_path, "PDFA_IN")
+    output_directory = os.path.join(base_path, "PDFA_OUT")
+    error_directory = os.path.join(base_path, "PDF_Not_Converted")
 
     setup_logging()
 
