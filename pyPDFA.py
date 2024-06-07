@@ -6,10 +6,11 @@ import subprocess
 import sys
 import time
 from typing import Union
+from pikepdf.models.metadata import PdfMetadata
 
 # Versioning
-__version__ = "1.4.2"
-# pyinstaller --onefile --name pyPDFA-V1.4.2 pyPDFA.py
+__version__ = "1.4.3"
+# pyinstaller --onefile --name pyPDFA-V1.4.3 pyPDFA.py
 
 # Global logger variables
 logger = logging.getLogger('main_logger')
@@ -147,14 +148,18 @@ def get_timeout(file_size_kb):
 
 def set_pdfa_metadata(pdf_path):
     try:
-        with pikepdf.open(pdf_path, allow_overwriting_input=True) as pdf:
-            info = pdf.docinfo
-            creation_date = info.get('/CreationDate')
-            info['/Producer'] = "MySmartPlans.com"
-            info['/pdfaid:Conformance'] = "B"
-            info['/pdfaid:Part'] = "1"
-            if creation_date:
-                info['/CreationDate'] = creation_date
+        with (pikepdf.open(pdf_path, allow_overwriting_input=True) as pdf):
+
+            with pdf.open_metadata(set_pikepdf_as_editor=False, update_docinfo=True, strict=True) as meta:
+                meta['xmp:CreatorTool'] = f"pyPDFA v{__version__}"
+                meta['pdf:Producer'] = "MySmartPlans.com"
+                meta['pdfaid:Conformance'] = "B"
+                meta['pdfaid:Part'] = "1"
+
+                if 'dc:title' in meta and meta['dc:title'] == 'Untitled':
+                    del meta['dc:title']
+
+            _unset_empty_metadata(meta)
             pdf.save()
             # logger.info(f"Set PDF/A metadata for {pdf_path}")
     except Exception as e:
@@ -162,7 +167,23 @@ def set_pdfa_metadata(pdf_path):
         log_exception("Stack trace:")
 
 
-def convert_to_pdfa(source_path, output_path, error_dir, input_dir):
+def _unset_empty_metadata(meta: PdfMetadata):
+    """Unset metadata fields that were explicitly set to empty strings."""
+    if 'dc:title' in meta and not meta['dc:title']:
+        del meta['dc:title']
+    if 'dc:creator' in meta and not meta['dc:creator']:
+        del meta['dc:creator']
+    if 'pdf:Author' in meta and not meta['pdf:Author']:
+        del meta['pdf:Author']
+    if 'dc:description' in meta and not meta['dc:description']:
+        del meta['dc:description']
+    if 'dc:subject' in meta and not meta['dc:subject']:
+        del meta['dc:subject']
+    if 'pdf:Keywords' in meta and not meta['pdf:Keywords']:
+        del meta['pdf:Keywords']
+
+
+def convert_to_pdfa(source_path, output_path, error_dir, input_dir, document_index, total_documents):
     process = None
     page_count = get_pdf_page_count(source_path)
     file_size_kb = os.path.getsize(source_path) / 1024
@@ -192,7 +213,7 @@ def convert_to_pdfa(source_path, output_path, error_dir, input_dir):
             f"-sOutputFile={output_path}",
             source_path
         ]
-
+        logger.info(f"Processing document {document_index} of {total_documents}")
         logger.info(f"Timeout set to {timeout_seconds} seconds for file size {file_size_kb:.0f} KB")
         logger.info(f"Pages to convert: {page_count}")
         logger.info(f"Please wait for the conversion to complete...")
@@ -304,17 +325,21 @@ def batch_convert(input_dir: Union[str, os.PathLike], output_dir: Union[str, os.
         logger.error(f"No files to process in {input_dir}.")
         return
 
+    total_documents = sum([len(files) for r, d, files in os.walk(input_dir) if any(f.endswith('.pdf') for f in files)])
+    document_index = 0
+
     has_errors = False
     for root, dirs, files in os.walk(input_dir):
         for file in files:
             if file.endswith('.pdf'):
+                document_index += 1
                 source_file = os.path.join(root, file)
                 relative_path = os.path.relpath(root, input_dir)
                 output_file_dir = os.path.join(output_dir, relative_path)
                 output_file = os.path.join(output_file_dir, file)
 
                 os.makedirs(output_file_dir, exist_ok=True)
-                success = convert_to_pdfa(source_file, output_file, error_dir, input_dir)
+                success = convert_to_pdfa(source_file, output_file, error_dir, input_dir, document_index, total_documents)
                 if not success:
                     has_errors = True
                 else:
@@ -332,16 +357,16 @@ def batch_convert(input_dir: Union[str, os.PathLike], output_dir: Union[str, os.
 
 if __name__ == '__main__':
     # Testing paths
-    # input_directory = r"E:\Python\xPDFTestFiles\PDFA_IN"
-    # output_directory = r"E:\Python\xPDFTestFiles\PDFA_OUT"
-    # error_directory = r"E:\Python\xPDFTestFiles\PDF_Not_Converted"
-    # base_path = get_base_path(input_directory)
+    input_directory = r"E:\Python\xPDFTestFiles\PDFA_IN"
+    output_directory = r"E:\Python\xPDFTestFiles\PDFA_OUT"
+    error_directory = r"E:\Python\xPDFTestFiles\PDF_Not_Converted"
+    base_path = get_base_path(input_directory)
 
     # Uncomment below for production paths
-    base_path = get_base_path()
-    input_directory = os.path.join(base_path, "PDFA_IN")
-    output_directory = os.path.join(base_path, "PDFA_OUT")
-    error_directory = os.path.join(base_path, "PDF_Not_Converted")
+    # base_path = get_base_path()
+    # input_directory = os.path.join(base_path, "PDFA_IN")
+    # output_directory = os.path.join(base_path, "PDFA_OUT")
+    # error_directory = os.path.join(base_path, "PDF_Not_Converted")
 
     setup_logging()
 

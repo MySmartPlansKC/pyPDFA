@@ -1,8 +1,31 @@
 # Changelog
 All notable changes to this project will be documented in this file.
 
-The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
-and this project adheres to [Semantic Versioning](https://semver.org/).
+## [1.4.3] - 2024-06-07
+### Changed
+  - Adjusted Metadata creation to be more complete.
+
+---
+
+## [1.4.2] - 2024-06-05
+### Fixed
+  - Corrected error that was deleting the input directory "PDFA_IN" when processing files not in folders.
+
+---
+
+## [1.4.1] - 2024-06-05
+### Changed
+  - Adjusted logging to be more comprehensive with new structure.
+  - Introduced a stack trace log for better tracking and to keep separate from general error logging.
+
+---
+
+## [1.4.0] - 2024-06-05
+### Changed
+  - Converted to pikepdf and Ghostscript pdf libraries for more comprehensive conversions.
+  - Removed concurrent processing since it was causing issues at this time.
+
+---
 
 ## [1.3.1] - 2024-05-21
 ### Fixed
