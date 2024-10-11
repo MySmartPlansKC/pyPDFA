@@ -1,6 +1,20 @@
 # Changelog
 All notable changes to this project will be documented in this file.
 
+## [1.5.0] - 2024-10-10
+### Added
+  - New compression settings for smaller file size
+  - New ghostscript logging for better tracking
+
+### Changed
+  - Fixed user input to default to 'yes' if no entry is made
+  - Valid entries are now 'y' / 'yes' / '' / 'n' / 'no'
+  - Adjusted Timeout display to reflect time in minutes instead of seconds
+
+## [1.4.4] - 2024-06-07
+### Changed
+  - Adjusted Logging
+
 ## [1.4.3] - 2024-06-07
 ### Changed
   - Adjusted Timeout settings for larger files.

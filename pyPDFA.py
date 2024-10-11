@@ -1,71 +1,75 @@
-import pikepdf
 import logging
 import os
+import pikepdf
 import shutil
 import subprocess
 import sys
 import time
+from pathlib import Path
 from typing import Union
 from pikepdf.models.metadata import PdfMetadata
 
 # Versioning
-__version__ = "1.4.4"
-# pyinstaller --onefile --name pyPDFA-V1.4.4 pyPDFA.py
+__version__ = "1.5.0"
+# pyinstaller --onefile --name pyPDFA-V1.5.0 pyPDFA.py
 
-# Global logger variables
+# Global variables
 logger = logging.getLogger('main_logger')
 error_logger = logging.getLogger('error_logger')
 stacktrace_logger = logging.getLogger('stacktrace_logger')
+gs_logger = logging.getLogger('ghostscript_logger')
+gs_log_file_path = None
+base_path = None
 
 
 def setup_logging():
+    global gs_log_file_path
     logger.setLevel(logging.DEBUG)
+
+    # Console Handler
     stream_handler = logging.StreamHandler()
     stream_handler.setLevel(logging.INFO)
-    formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s', datefmt='%Y-%m-%d %H:%M:%S')
+    formatter = logging.Formatter(
+        '%(asctime)s - %(levelname)s - %(message)s',
+        datefmt='%Y-%m-%d %H:%M:%S'
+    )
     stream_handler.setFormatter(formatter)
     logger.addHandler(stream_handler)
 
-    # Initialize placeholders for file handlers which will be setup on first error
-    error_logger.setLevel(logging.ERROR)
-    stacktrace_logger.setLevel(logging.ERROR)
+    # File Handler for Errors
+    error_log_file_path = base_path / "pdf_conversion_error.log"
+    error_file_handler = logging.FileHandler(error_log_file_path)
+    error_file_handler.setLevel(logging.ERROR)
+    error_file_handler.setFormatter(formatter)
+    error_logger.addHandler(error_file_handler)
+
+    # File Handler for Stack Traces
+    stacktrace_log_file_path = base_path / "pdf_conversion_stacktrace.log"
+    stacktrace_file_handler = logging.FileHandler(stacktrace_log_file_path)
+    stacktrace_file_handler.setLevel(logging.ERROR)
+    stacktrace_file_handler.setFormatter(formatter)
+    stacktrace_logger.addHandler(stacktrace_file_handler)
+
+    # File Handler for Ghostscript Logs
+    gs_log_file_path = base_path / "ghostscript.log"
+    gs_file_handler = logging.FileHandler(gs_log_file_path)
+    gs_file_handler.setLevel(logging.DEBUG)  # Capture all Ghostscript logs
+    gs_file_handler.setFormatter(formatter)
+    gs_logger.addHandler(gs_file_handler)
+    gs_logger.setLevel(logging.DEBUG)
 
 
-def setup_file_logging(logging_base_path):
-    formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s', datefmt='%Y-%m-%d %H:%M:%S')
-
-    # Setup file handler for errors if not already set
-    if not any(isinstance(h, logging.FileHandler) for h in error_logger.handlers):
-        error_log_file_path = os.path.join(logging_base_path, "pdf_conversion_error.log")
-        error_file_handler = logging.FileHandler(error_log_file_path)
-        error_file_handler.setLevel(logging.ERROR)
-        error_file_handler.setFormatter(formatter)
-        error_logger.addHandler(error_file_handler)
-        error_logger.error("Error log file setup complete.")
-
-    # Setup file handler for stack traces if not already set
-    if not any(isinstance(h, logging.FileHandler) for h in stacktrace_logger.handlers):
-        stacktrace_log_file_path = os.path.join(logging_base_path, "pdf_conversion_stacktrace.log")
-        stacktrace_file_handler = logging.FileHandler(stacktrace_log_file_path)
-        stacktrace_file_handler.setLevel(logging.ERROR)
-        stacktrace_file_handler.setFormatter(formatter)
-        stacktrace_logger.addHandler(stacktrace_file_handler)
-        stacktrace_logger.error("Stack trace log file setup complete.")
-
-
-def log_error(message):
-    setup_file_logging(base_path)
+def log_error(message: str):
     error_logger.error(message)
 
 
-def log_exception(message):
-    setup_file_logging(base_path)
+def log_exception(message: str):
     stacktrace_logger.exception(message)
 
 
-def safe_remove(path):
+def safe_remove(path: Path):
     try:
-        os.unlink(path)
+        path.unlink()
     except PermissionError:
         log_error(f"Could not delete {path} - it may be in use.")
         log_exception(f"Error deleting file {path}:")
@@ -74,54 +78,57 @@ def safe_remove(path):
         log_exception("Stack trace:")
 
 
-def clear_input_directory(directory):
+def clear_input_directory(directory: Path):
     for root, dirs, files in os.walk(directory, topdown=False):
+        root_path = Path(root)
         for name in files:
-            file_path = os.path.join(root, name)
+            file_path = root_path / name
             safe_remove(file_path)
         for name in dirs:
-            dir_path = os.path.join(root, name)
-            if "PDFA_IN" not in dir_path:
+            dir_path = root_path / name
+            if "PDFA_IN" not in dir_path.name:
                 try:
-                    os.rmdir(dir_path)
+                    dir_path.rmdir()
                 except OSError as e:
                     log_error(f"Could not delete directory {dir_path}: {e}")
                     log_exception("Stack trace:")
 
 
-def safe_rmtree(directory):
+def safe_rmtree(directory: Path):
     for root, dirs, files in os.walk(directory, topdown=False):
+        root_path = Path(root)
         for name in files:
-            file_path = os.path.join(root, name)
+            file_path = root_path / name
             safe_remove(file_path)
         for name in dirs:
-            dir_path = os.path.join(root, name)
+            dir_path = root_path / name
             try:
-                os.rmdir(dir_path)
+                dir_path.rmdir()
             except OSError as e:
                 log_error(f"Could not delete directory {dir_path}: {e}")
                 log_exception("Stack trace:")
 
 
-def get_base_path(input_directory_dev=None):
+def get_base_path(testing_dir: Union[Path, None] = None) -> Path:
     if getattr(sys, 'frozen', False):
-        return os.path.dirname(sys.executable)
+        return Path(sys.executable).parent
+    elif testing_dir:
+        return Path(testing_dir)
     else:
-        return os.path.dirname(input_directory_dev)
+        return Path.cwd()
 
 
-def get_pdf_page_count(pdf_path):
+def get_pdf_page_count(pdf_path: Path) -> int:
     try:
         with pikepdf.open(pdf_path) as pdf:
-            page_count = len(pdf.pages)
-            return page_count
+            return len(pdf.pages)
     except Exception as e:
         log_error(f"Error getting page count for {pdf_path}: {e}")
         log_exception("Stack trace:")
         return 0
 
 
-def remove_annotations_and_comments(pdf_path):
+def remove_annotations_and_comments(pdf_path: Path):
     try:
         with pikepdf.open(pdf_path, allow_overwriting_input=True) as pdf:
             for page in pdf.pages:
@@ -133,35 +140,33 @@ def remove_annotations_and_comments(pdf_path):
         log_exception("Stack trace:")
 
 
-def get_timeout(file_size_kb):
+def get_timeout(file_size_kb: float) -> int:
     if file_size_kb < 150000:
         return 480  # 8 minutes
     elif file_size_kb < 300000:
         return 900  # 15 minutes
     elif file_size_kb < 600000:
-        return 1200  # 20 minutes
+        return 2400  # 40 minutes
     elif file_size_kb < 900000:
-        return 1500  # 25 minutes
+        return 3600  # 60 minutes
     else:
-        return 1800  # 30 minutes
+        return 5400  # 90 minutes
 
 
-def set_pdfa_metadata(pdf_path):
+def set_pdfa_metadata(pdf_path: Path):
     try:
-        with (pikepdf.open(pdf_path, allow_overwriting_input=True) as pdf):
-
+        with pikepdf.open(pdf_path, allow_overwriting_input=True) as pdf:
             with pdf.open_metadata(set_pikepdf_as_editor=False, update_docinfo=True, strict=True) as meta:
                 meta['xmp:CreatorTool'] = f"pyPDFA v{__version__}"
                 meta['pdf:Producer'] = "MySmartPlans.com"
                 meta['pdfaid:Conformance'] = "B"
-                meta['pdfaid:Part'] = "1"
+                meta['pdfaid:Part'] = "1"  # PDF/A-1b Compliance
 
                 if 'dc:title' in meta and meta['dc:title'] == 'Untitled':
                     del meta['dc:title']
 
             _unset_empty_metadata(meta)
             pdf.save()
-            # logger.info(f"Set PDF/A metadata for {pdf_path}")
     except Exception as e:
         log_error(f"Failed to set PDF/A metadata for {pdf_path}: {e}")
         log_exception("Stack trace:")
@@ -169,97 +174,136 @@ def set_pdfa_metadata(pdf_path):
 
 def _unset_empty_metadata(meta: PdfMetadata):
     """Unset metadata fields that were explicitly set to empty strings."""
-    if 'dc:title' in meta and not meta['dc:title']:
-        del meta['dc:title']
-    if 'dc:creator' in meta and not meta['dc:creator']:
-        del meta['dc:creator']
-    if 'pdf:Author' in meta and not meta['pdf:Author']:
-        del meta['pdf:Author']
-    if 'dc:description' in meta and not meta['dc:description']:
-        del meta['dc:description']
-    if 'dc:subject' in meta and not meta['dc:subject']:
-        del meta['dc:subject']
-    if 'pdf:Keywords' in meta and not meta['pdf:Keywords']:
-        del meta['pdf:Keywords']
+    fields = ['dc:title', 'dc:creator', 'pdf:Author', 'dc:description', 'dc:subject', 'pdf:Keywords']
+    for field in fields:
+        if field in meta and not meta[field]:
+            del meta[field]
 
 
-def convert_to_pdfa(source_path, output_path, error_dir, input_dir, document_index, total_documents):
+def convert_to_pdfa(
+        source_path: Path,
+        output_path: Path,
+        error_dir: Path,
+        input_dir: Path,
+        document_index: int,
+        total_documents: int
+) -> bool:
     process = None
     page_count = get_pdf_page_count(source_path)
-    file_size_kb = os.path.getsize(source_path) / 1024
+    file_size_kb = source_path.stat().st_size / 1024
     timeout_seconds = get_timeout(file_size_kb)
+    timeout_minutes = timeout_seconds / 60
+
     try:
         # Remove annotations and comments
         remove_annotations_and_comments(source_path)
 
         gs_executable = r'C:\Program Files\gs\gs10.03.0\bin\gswin64c.exe'
+        # icc_profile_path = icc_profile_directory / icc_profile
+
+        # if not icc_profile_path.is_file():
+        #     log_error(f"ICC profile not found at {icc_profile_path}. Conversion aborted.")
+        #     logger.error(f"ICC profile not found at {icc_profile_path}.")
+        #     return False
 
         cmd = [
             gs_executable,
-            "-dQUIET",
             "-dPDFA=1",
+            "-dQUIET",
+            "-dNOOUTERSAVE",
             "-dBATCH",
             "-dNOPAUSE",
-            # "-dNOOUTERSAVE",
-            "-sColorConversionStrategy=RGB",
+            "-dPDFACompatibilityPolicy=1",
+            "-dEmbedAllFonts=true",
+            "-dSubsetFonts=true",
+            "-dCompressFonts=true",
+            "-dAutoFilterColorImages=true",
+            "-dAutoFilterGrayImages=true",
+            "-dColorImageFilter=/FlateEncode",
+            "-dGrayImageFilter=/FlateEncode",
+            "-dMonoImageFilter=/CCITTFaxEncode",
+            "-dCompressPages=true",
+            "-dDownsampleColorImages=true",
+            "-dDownsampleGrayImages=true",
+            "-dDownsampleMonoImages=true",
+            # "-dColorImageResolution=150",
+            # "-dGrayImageResolution=150",
+            # "-dMonoImageResolution=150",
+            # "-dFastWebView=true",
             "-sDEVICE=pdfwrite",
-            # "-dPDFACompatibilityPolicy=1",
-            # "-dEmbedAllFonts=true",
-            # "-dSubsetFonts=true",
-            # "-dConvertCMYKImagesToRGB=true",
-            # "-dRemoveAnnots=true",
-            # "-dRemoveComments=true",
-            # "-dWriteXRefStm=false",
-            f"-sOutputFile={output_path}",
-            source_path
+            "-sColorConversionStrategy=RGB",
+            # f"-sOutputICCProfile={str(icc_profile_path)}",
+            f"-sOutputFile={str(output_path)}",
+            str(source_path)
         ]
+
+        # Log the command for debugging
+        # logger.info(f"Running Ghostscript command: {' '.join(cmd)}")
         logger.info(f"Processing document {document_index} of {total_documents}")
-        logger.info(f"Timeout set to {timeout_seconds} seconds for file size {file_size_kb:.0f} KB")
+        logger.info(f"Timeout set to {timeout_minutes} minutes for file size {file_size_kb:.0f} KB")
         logger.info(f"Pages to convert: {page_count}")
         logger.info(f"Please wait for the conversion to complete...")
 
-        process = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-        _, stderr = process.communicate(timeout=timeout_seconds)
+        # Redirect stdout & stderr to the Ghostscript log file
+        with open(str(gs_log_file_path), "a") as gs_log:
+            process = subprocess.Popen(
+                cmd,
+                stdout=gs_log,
+                stderr=gs_log,
+                text=True
+            )
+            process.communicate(timeout=timeout_seconds)
 
+        # After Ghostscript finishes, check if the output file exists
         if process.returncode == 0:
             set_pdfa_metadata(output_path)  # Set metadata after successful conversion
             logger.info(f"Successfully converted {source_path} to PDF/A.")
             return True
         else:
-            logger.info(f"Conversion failed for {source_path}")
-            log_error(f"Conversion failed for {source_path}")
-            stacktrace_logger.error(f"Conversion failed for {source_path}: {stderr.decode()}")
-            return False
+            # If exit code is non-zero, check if output file exists
+            if output_path.exists():
+                set_pdfa_metadata(output_path)
+                logger.warning(f"""Conversion for
+                    {source_path}
+                    completed with warnings.""")
+                log_error(
+                    f"Ghostscript returned exit code {process.returncode} for {source_path}, but output file exists.")
+                return True
+            else:
+                # Treat as failure if output file does not exist
+                log_error(f"Conversion failed for {source_path}; output file not found.")
+                stacktrace_logger.error(f"Conversion failed for {source_path}: Exit code {process.returncode}")
+                move_to_error_directory(source_path, error_dir, input_dir, output_path)
+                return False
 
     except subprocess.TimeoutExpired:
         if process:
             process.terminate()
             process.wait()
-        if os.path.exists(output_path):
-            os.remove(output_path)
-
+        if output_path.exists():
+            output_path.unlink()
         move_to_error_directory(source_path, error_dir, input_dir, output_path)
-        logger.info(f"Timeout expired during conversion of {source_path}")
+        logger.error(f"Timeout expired during conversion of {source_path}")
         log_error(f"Timeout expired during conversion of {source_path}")
         stacktrace_logger.error(f"Timeout expired during conversion of {source_path}")
-        stacktrace_logger.error(f"{timeout_seconds} second Timeout for file size {file_size_kb:.0f} KB")
+        stacktrace_logger.error(f"{timeout_minutes} minute Timeout for file size {file_size_kb:.0f} KB")
         return False
 
     except subprocess.CalledProcessError as e:
         if process and process.poll() is None:
             process.terminate()
             process.wait()
-
         move_to_error_directory(source_path, error_dir, input_dir, output_path)
         log_error(f"Conversion error for {source_path}: {e}")
+        stacktrace_logger.error(f"Conversion error for {source_path}: {e}")
         return False
 
     except Exception as e:
         if process and process.poll() is None:
             process.terminate()
             process.wait()
-
         log_error(f"Unexpected error during conversion of {source_path}: {e}")
+        stacktrace_logger.error(f"Unexpected error during conversion of {source_path}: {e}")
         move_to_error_directory(source_path, error_dir, input_dir, output_path)
         return False
 
@@ -269,19 +313,15 @@ def convert_to_pdfa(source_path, output_path, error_dir, input_dir, document_ind
             process.wait()
 
 
-def move_to_error_directory(source_path, error_dir, input_dir, output_path):
+def move_to_error_directory(source_path: Path, error_dir: Path, input_dir: Path, output_path: Path):
     time.sleep(1)
     try:
-        if os.path.exists(output_path):
-            os.remove(output_path)
-        if not os.path.exists(error_dir):
-            os.makedirs(error_dir)
-        relative_path = os.path.relpath(str(source_path), input_dir)
-        destination_path = os.path.join(error_dir, relative_path)
-
-        os.makedirs(os.path.dirname(destination_path), exist_ok=True)
+        if output_path.exists():
+            output_path.unlink()
+        relative_path = source_path.relative_to(input_dir)
+        destination_path = error_dir / relative_path
+        destination_path.parent.mkdir(parents=True, exist_ok=True)
         shutil.move(str(source_path), str(destination_path))
-
         logger.info(f"File moved to error directory: {destination_path}")
         log_error(f"File moved to error directory: {destination_path}")
     except Exception as e:
@@ -289,26 +329,29 @@ def move_to_error_directory(source_path, error_dir, input_dir, output_path):
         log_exception("Stack trace:")
 
 
-def check_and_clear_directory(directory):
-    if os.path.exists(directory):
-        if os.listdir(directory):  # Check if the directory is not empty
-            response = input(f"Directory {directory} is not empty. Delete all contents? (y/n): ")
-            if response.lower() == 'y':
-                safe_rmtree(directory)
-                logger.info(f"All contents of {directory} have been deleted.")
-            else:
-                logger.error("Operation aborted by the user.")
-                return False
+def check_and_clear_directory(directory: Path) -> bool:
+    if directory.exists():
+        if any(directory.iterdir()):  # Check if the directory is not empty
+            while True:
+                response = input(f"Directory {directory} is not empty. Delete all contents? (Y/n): ").strip().lower()
+                if response in ('y', 'yse', ''):
+                    safe_rmtree(directory)
+                    logger.info(f"All contents of {directory} have been deleted.")
+                    break
+                elif response in ('n', 'no'):
+                    logger.error("Operation aborted by the user.")
+                    return False
+                else:
+                    print("Invalid input. Please enter 'Y' for Yes or 'N' for No.")
     return True
 
 
-def remove_empty_directories(path, root_dir):
+def remove_empty_directories(path: Path, root_dir: Path):
     try:
-        if os.path.isdir(path) and not os.listdir(path):
-            if os.path.basename(path) != "PDFA_IN":
-                os.rmdir(path)
-                # logger.info(f"Removed empty directory: {path}")
-                parent_dir = os.path.dirname(path)
+        if path.is_dir() and not any(path.iterdir()):
+            if path.name != "PDFA_IN":
+                path.rmdir()
+                parent_dir = path.parent
                 if parent_dir != root_dir:
                     remove_empty_directories(parent_dir, root_dir)
     except OSError as e:
@@ -316,39 +359,41 @@ def remove_empty_directories(path, root_dir):
         log_exception("Stack trace:")
 
 
-def batch_convert(input_dir: Union[str, os.PathLike], output_dir: Union[str, os.PathLike], error_dir: Union[str, os.PathLike]):
+def batch_convert(input_dir: Path, output_dir: Path, error_dir: Path):
     if not check_and_clear_directory(output_dir):
         return
     if not check_and_clear_directory(error_dir):
         return
-    if not os.path.exists(input_dir) or not os.listdir(input_dir):
+    if not input_dir.exists() or not any(input_dir.iterdir()):
         logger.error(f"No files to process in {input_dir}.")
         return
 
-    total_documents = sum([len(files) for r, d, files in os.walk(input_dir) if any(f.endswith('.pdf') for f in files)])
+    total_documents = sum(1 for _ in input_dir.rglob('*.pdf'))
     document_index = 0
 
     has_errors = False
-    for root, dirs, files in os.walk(input_dir):
-        for file in files:
-            if file.endswith('.pdf'):
-                document_index += 1
-                source_file = os.path.join(root, file)
-                relative_path = os.path.relpath(root, input_dir)
-                output_file_dir = os.path.join(output_dir, relative_path)
-                output_file = os.path.join(output_file_dir, file)
+    for source_file in input_dir.rglob('*.pdf'):
+        document_index += 1
+        relative_path = source_file.relative_to(input_dir)
+        output_file = output_dir / relative_path
 
-                os.makedirs(output_file_dir, exist_ok=True)
-                success = convert_to_pdfa(source_file, output_file, error_dir, input_dir, document_index, total_documents)
-                if not success:
-                    has_errors = True
-                else:
-                    os.remove(source_file)
+        output_file.parent.mkdir(parents=True, exist_ok=True)
+        success = convert_to_pdfa(
+            source_file,
+            output_file,
+            error_dir,
+            input_dir,
+            document_index,
+            total_documents
+        )
+        if not success:
+            has_errors = True
+        else:
+            source_file.unlink()
 
-                remove_empty_directories(os.path.dirname(source_file), input_dir)
+        remove_empty_directories(source_file.parent, input_dir)
 
     clear_input_directory(input_dir)
-
     logger.info("Batch conversion process completed.")
     if has_errors:
         logger.info("There has been at least one error, please check the PDF_Not_Converted folder.")
@@ -356,29 +401,30 @@ def batch_convert(input_dir: Union[str, os.PathLike], output_dir: Union[str, os.
 
 
 if __name__ == '__main__':
-    # Testing paths
-    # input_directory = r"E:\Python\xPDFTestFiles\PDFA_IN"
-    # output_directory = r"E:\Python\xPDFTestFiles\PDFA_OUT"
-    # error_directory = r"E:\Python\xPDFTestFiles\PDF_Not_Converted"
-    # base_path = get_base_path(input_directory)
+    # Configuration flag to switch environments
+    USE_PRODUCTION_PATHS = True  # Set to True for production & False for testing
 
-    # Uncomment below for production paths
-    base_path = get_base_path()
-    input_directory = os.path.join(base_path, "PDFA_IN")
-    output_directory = os.path.join(base_path, "PDFA_OUT")
-    error_directory = os.path.join(base_path, "PDF_Not_Converted")
+    if USE_PRODUCTION_PATHS:
+        # Production paths
+        base_path = get_base_path()
+        input_directory = base_path / "PDFA_IN"
+        output_directory = base_path / "PDFA_OUT"
+        error_directory = base_path / "PDF_Not_Converted"
+    else:
+        # Testing paths
+        testing_directory = Path(r"E:\Python\xPDFTestFiles")
+        base_path = get_base_path(testing_directory)
+        input_directory = base_path / "PDFA_IN"
+        output_directory = base_path / "PDFA_OUT"
+        error_directory = base_path / "PDF_Not_Converted"
 
     setup_logging()
 
     logger.info(f"Starting PDFA Conversion v{__version__}")
     time.sleep(1)
 
-    if not os.path.exists(input_directory):
-        os.makedirs(input_directory)
-        print("The 'PDFA_IN' folder was missing and has now been created.")
-        print("Please add your files/folders to the 'PDFA_IN' folder for processing.")
-        input("Press Enter to close the program...")
-        sys.exit(1)
+    # Ensure directories exist
+    input_directory.mkdir(parents=True, exist_ok=True)
+    output_directory.mkdir(parents=True, exist_ok=True)
 
-    os.makedirs(output_directory, exist_ok=True)
     batch_convert(input_directory, output_directory, error_directory)
